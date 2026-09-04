@@ -606,7 +606,8 @@ impl ShojiWM {
                     .and_then(|config| config.primary)
                     .unwrap_or(false)
             })
-            .cloned();
+            .cloned()
+            .or_else(|| self.space.outputs().next().cloned());
         if let Some(output) = output {
             self.warp_cursor_to_output_center(&output);
         }
