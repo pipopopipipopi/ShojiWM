@@ -597,7 +597,16 @@ impl ShojiWM {
     }
 
     pub fn warp_cursor_to_initial_output_center(&mut self) {
-        let output = self.space.outputs().next().cloned();
+        let output = self
+            .space
+            .outputs()
+            .find(|output| {
+                self.runtime_output_configs
+                    .get(&output.name())
+                    .and_then(|config| config.primary)
+                    .unwrap_or(false)
+            })
+            .cloned();
         if let Some(output) = output {
             self.warp_cursor_to_output_center(&output);
         }

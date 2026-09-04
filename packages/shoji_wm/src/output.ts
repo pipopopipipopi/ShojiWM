@@ -36,6 +36,7 @@ function cloneOutputState(
         position: { ...snapshot.position },
         scale: snapshot.scale,
         transform: snapshot.transform,
+        primary: snapshot.primary,
         availableModes: snapshot.availableModes.map((mode) => ({ ...mode })),
       },
     ]),
@@ -66,6 +67,7 @@ function normalizeOutputState(
         position: { ...snapshot.position },
         scale: snapshot.scale,
         transform: snapshot.transform ?? "normal",
+        primary: snapshot.primary ?? false,
         availableModes: snapshot.availableModes.map((mode) => ({ ...mode })),
       },
     ]),
@@ -104,6 +106,7 @@ function cloneOutputConfigEntry(config: OutputConfigEntry): OutputConfigEntry {
           : undefined,
     scale: config.scale,
     transform: config.transform,
+    primary: config.primary,
   };
 }
 

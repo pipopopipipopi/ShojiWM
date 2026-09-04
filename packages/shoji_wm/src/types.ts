@@ -1070,6 +1070,7 @@ export interface OutputStateSnapshot {
   scale: number;
   /** Currently applied transform. / 現在適用されている transform。 */
   transform?: OutputTransform;
+  primary?: boolean;
   availableModes: OutputMode[];
 }
 
