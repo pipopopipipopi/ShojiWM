@@ -474,7 +474,7 @@ COMPOSITOR.output.configure((context) => {
     resolution: "best",
     position: "auto",
     scale: 1.6,
-    primary: true,
+    focusAtStartup: true,
   };
 
   const isDocked = context.connected.some(

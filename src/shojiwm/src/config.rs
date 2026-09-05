@@ -33,7 +33,7 @@ pub struct RuntimeOutputConfig {
     pub position: Option<RuntimeOutputPositionPreference>,
     pub scale: Option<f64>,
     pub transform: Option<RuntimeOutputTransform>,
-    pub primary: Option<bool>,
+    pub focus_at_startup: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize)]

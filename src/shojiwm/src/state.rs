@@ -603,7 +603,7 @@ impl ShojiWM {
             .find(|output| {
                 self.runtime_output_configs
                     .get(&output.name())
-                    .and_then(|config| config.primary)
+                    .and_then(|config| config.focus_at_startup)
                     .unwrap_or(false)
             })
             .cloned()
