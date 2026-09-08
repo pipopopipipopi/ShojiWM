@@ -279,9 +279,12 @@ fn error_chain_has_drm_test_failed(error: &(dyn std::error::Error + 'static)) ->
 /// kernel will never accept cannot spin the render loop forever.
 ///
 /// Deliberately narrow. EACCES is handled earlier (the session-paused path, and
-/// `error_chain_has_permission_denied`), and EBUSY/EAGAIN/EINTR are transient
+/// `error_chain_has_permission_denied`), and EAGAIN/EINTR are transient
 /// conditions smithay itself classifies as `TemporaryFailure`. Only EINVAL means
 /// "the kernel looked at this configuration and said no".
+///
+/// EBUSY was excluded here on that same reasoning. That was wrong, and it cost a
+/// login session -- see `error_chain_has_busy_commit`.
 fn error_chain_has_rejected_commit(error: &(dyn std::error::Error + 'static)) -> bool {
     let mut current = Some(error);
     while let Some(error) = current {
@@ -290,6 +293,55 @@ fn error_chain_has_rejected_commit(error: &(dyn std::error::Error + 'static)) ->
                 drm,
                 DrmError::Access(access)
                     if access.source.kind() == std::io::ErrorKind::InvalidInput
+            )
+        }) {
+            return true;
+        }
+        current = error.source();
+    }
+    false
+}
+
+/// Whether a render/commit error chain bottoms out in the kernel refusing an
+/// atomic commit because a page flip is *already in flight* (`DrmError::Access`
+/// carrying `EBUSY`).
+///
+/// The third sibling of `error_chain_has_drm_test_failed` and
+/// `error_chain_has_rejected_commit`, and the one the other two's "deliberately
+/// narrow" note explicitly ruled out: EBUSY was assumed to reach us as
+/// smithay's `TemporaryFailure`, never as `Access`.
+///
+/// The 7/9/2026 session log disproves that for the page-flip path. Twelve
+/// milliseconds after `recovered tty output after retry attempts=2` reported
+/// DP-1 back:
+///
+/// ```text
+/// tty render iteration failed; shutting down
+///   error=DrmError(Access(AccessError { errmsg: "Page flip commit failed",
+///     source: Os { code: 16, kind: ResourceBusy } }))
+/// ```
+///
+/// The same `Access` variant EINVAL uses. It fell through both predicates to
+/// `render_if_needed`'s `Err` return and exited the compositor, taking the whole
+/// login session with it -- several seconds after resume, with the output
+/// connected and working.
+///
+/// A page flip still in flight when the machine suspends is never reaped, so on
+/// resume the CRTC believes one is pending and refuses the next. Rebuilding the
+/// surface clears the stale flip. This is intermittent by nature: a resume with
+/// no flip pending at suspend time is unaffected.
+///
+/// `reset_surface_after_commit_failure` bounds this at 3 resets per 10s, so a
+/// CRTC that is genuinely wedged still ends the session rather than spinning the
+/// render loop forever.
+fn error_chain_has_busy_commit(error: &(dyn std::error::Error + 'static)) -> bool {
+    let mut current = Some(error);
+    while let Some(error) = current {
+        if error.downcast_ref::<DrmError>().is_some_and(|drm| {
+            matches!(
+                drm,
+                DrmError::Access(access)
+                    if access.source.kind() == std::io::ErrorKind::ResourceBusy
             )
         }) {
             return true;
@@ -6259,7 +6311,9 @@ fn render_surface(
             Err(
                 err,
             ) => {
-                if error_chain_has_drm_test_failed(&err) || error_chain_has_rejected_commit(&err)
+                if error_chain_has_drm_test_failed(&err)
+                    || error_chain_has_rejected_commit(&err)
+                    || error_chain_has_busy_commit(&err)
                 {
                     warn!(
                         output = %output.name(),
@@ -6765,6 +6819,7 @@ fn render_surface(
                         }
                         if error_chain_has_drm_test_failed(&err)
                             || error_chain_has_rejected_commit(&err)
+                            || error_chain_has_busy_commit(&err)
                         {
                             warn!(
                                 output = %output.name(),
